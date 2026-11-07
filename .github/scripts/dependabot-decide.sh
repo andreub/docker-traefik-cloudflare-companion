@@ -17,9 +17,21 @@ esac
 deps=$(printf '%s\n' "$msg" | grep -cE '^- dependency-name:' || true)
 [ "$deps" -gt 0 ] || { echo review; exit 0; }
 
-types=$(printf '%s\n' "$msg" | sed -nE 's/^ *update-type: *//p')
-if printf '%s\n' "$types" | grep -vE '^(version-update:semver-patch)?$' | grep -q .; then
-    echo review
-else
+# Every dependency must carry an explicit update-type of semver-patch.
+# Exception: docker digest-only bumps have no update-type and no version change
+# (title "Bump alpine from `<old digest>` to `<new digest>`").
+# A missing update-type anywhere else (e.g. a pip requirement range change
+# like ==4.1.* -> ==5.9.*) means review — that's how PR #1 slipped through.
+patches=$(printf '%s\n' "$msg" | grep -cE '^ *update-type: *version-update:semver-patch *$' || true)
+types=$(printf '%s\n' "$msg" | grep -cE '^ *update-type:' || true)
+title=$(printf '%s\n' "$msg" | head -1)
+
+if [ "$types" -eq "$deps" ] && [ "$patches" -eq "$deps" ]; then
     echo safe
+elif [ "$types" -eq 0 ] && [ "$deps" -eq 1 ] \
+     && case "$branch" in dependabot/docker/*) true ;; *) false ;; esac \
+     && printf '%s\n' "$title" | grep -qE '^(deps\([a-z]+\): )?[Bb]ump [^ ]+ from `[0-9a-f]{7,}` to `[0-9a-f]{7,}`'; then
+    echo safe
+else
+    echo review
 fi
