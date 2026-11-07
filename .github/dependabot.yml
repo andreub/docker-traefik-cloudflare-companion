@@ -1,7 +1,25 @@
 version: 2
 updates:
-  # Maintain dependencies for GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  # Base image (FROM alpine:<version>@sha256:...): new Alpine releases and digests
+  - package-ecosystem: docker
+    directory: /
     schedule:
-      interval: "daily"
+      interval: weekly
+    commit-message:
+      prefix: "deps(docker)"
+
+  # requirements.txt (cloudflare, get-docker-secret, requests)
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deps(pip)"
+
+  # Action versions in .github/workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "deps(actions)"

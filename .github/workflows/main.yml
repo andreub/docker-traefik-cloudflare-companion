@@ -5,8 +5,9 @@ on:
     branches: [main]
     tags: ["*-andreub.*"]
     paths-ignore: ["README.md", "CHANGELOG.md"]
+  pull_request:
   schedule:
-    # Weekly rebuild to pick up Alpine security updates (Watchtower pulls :latest)
+    # Weekly rebuild to pick up Alpine package fixes. Pushes only if a package changed.
     - cron: "17 4 * * 1"
   workflow_dispatch:
 
@@ -40,6 +41,8 @@ jobs:
           context: .
           platforms: linux/amd64
           load: true
+          pull: true
+          no-cache: ${{ github.event_name == 'schedule' }}
           tags: tcc:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -53,13 +56,34 @@ jobs:
           docker run --rm -e DRY_RUN=true -e CF_TOKEN=dummy -e TARGET_DOMAIN=example.com \
             -e DOMAIN1=example.com -e DOMAIN1_ZONE_ID=dummy -e ENABLE_DOCKER_POLL=false tcc:ci
 
+      # Scheduled runs only: skip the push (and Watchtower's restart) if no package changed.
+      - id: changes
+        name: Compare packages with published latest
+        if: github.event_name == 'schedule'
+        run: |
+          .github/scripts/package-manifest.sh tcc:ci > new.txt
+          if docker pull -q "$IMAGE:latest" >/dev/null 2>&1; then
+            .github/scripts/package-manifest.sh "$IMAGE:latest" > old.txt
+          else
+            : > old.txt
+          fi
+          if diff -u old.txt new.txt > diff.txt; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No package changes since the published latest; not pushing." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            { echo '### Package changes'; echo '```diff'; grep -E '^[-+][^-+]' diff.txt; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: docker/login-action@v4
+        if: github.event_name != 'pull_request' && steps.changes.outputs.changed != 'false'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push
+        if: github.event_name != 'pull_request' && steps.changes.outputs.changed != 'false'
         uses: docker/build-push-action@v7
         with:
           context: .

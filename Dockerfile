@@ -1,6 +1,6 @@
-ARG ALPINE_VERSION="3.24"
-
-FROM docker.io/library/alpine:${ALPINE_VERSION}
+# Pinned tag + digest; Dependabot opens a PR when a new Alpine release/digest appears.
+# Alpine package fixes between releases come from `apk upgrade` + the weekly CI rebuild.
+FROM docker.io/library/alpine:3.24.4@sha256:93b41ef40b1677fce8fcc64ff4af09daddfacf5040afde618bc46c1e2d1cc7d4
 LABEL maintainer="andreub (fork of github.com/tiredofit/docker-traefik-cloudflare-companion)" \
       org.opencontainers.image.source="https://github.com/andreub/docker-traefik-cloudflare-companion"
 
