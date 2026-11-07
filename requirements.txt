@@ -1,6 +1,6 @@
 # Installed with pip on top of the Alpine py3-* packages in the Dockerfile.
 # certifi comes from Alpine's py3-certifi, which uses the system CA bundle
 # (/etc/ssl/certs/ca-certificates.crt) instead of shipping its own cacert.pem.
-cloudflare==4.1.*
+cloudflare==5.10.*
 get-docker-secret
 requests
