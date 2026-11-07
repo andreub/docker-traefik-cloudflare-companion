@@ -79,7 +79,11 @@ synced_mappings = {}
 class RepeatedTimer(threading.Timer):
     def run(self):
         while not self.finished.wait(self.interval):
-            self.function(*self.args, **self.kwargs)
+            # An uncaught exception would end this thread and silently stop polling
+            try:
+                self.function(*self.args, **self.kwargs)
+            except Exception:
+                logger.exception("Polling run failed; retrying in %s seconds", self.interval)
 
 
 def init_doms_from_env():
@@ -352,9 +356,16 @@ def check_traefik(included_hosts, excluded_hosts):
     mappings = {}
     logger.debug("Called check_traefik")
     if TRAEFIK_VERSION == "2":
-        r = requests.get("{}/api/http/routers".format(TRAEFIK_POLL_URL))
-        if r.ok:
-            for router in r.json():
+        try:
+            r = requests.get("{}/api/http/routers".format(TRAEFIK_POLL_URL), timeout=30)
+            routers = r.json() if r.ok else None
+        except (requests.RequestException, ValueError) as ex:
+            logger.error("Traefik poll failed (%s): %s", TRAEFIK_POLL_URL, ex)
+            return mappings
+        if routers is None:
+            logger.error("Traefik poll failed (%s): HTTP %s", TRAEFIK_POLL_URL, r.status_code)
+        else:
+            for router in routers:
                 if "status" in router and router["status"] == "enabled":
                     if "name" in router and "rule" in router:
                         name = router["name"]

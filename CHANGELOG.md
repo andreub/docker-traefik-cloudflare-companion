@@ -1,3 +1,11 @@
+## 7.4.0-andreub.5 2026-11-07 <andreub@github>
+
+   ### Fixed
+      - Traefik API unreachable (e.g. Traefik restarting) made the app exit; it now logs "Traefik poll failed" and keeps polling, resuming when Traefik is back
+      - Traefik poll requests now time out after 30 seconds instead of possibly hanging forever
+      - Any other error inside a polling run is logged and the next run still happens
+
+
 ## 7.4.0-andreub.4 2026-11-07 <andreub@github>
 
    ### Fixed
