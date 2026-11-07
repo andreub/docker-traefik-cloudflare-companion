@@ -1,3 +1,16 @@
+## 7.4.0-andreub.1 2026-11-07 <andreub@github>
+
+   ### Changed
+      - Base image is now the official docker.io/library/alpine:3.24 (tiredofit/alpine is archived and no longer published)
+      - Replaced the s6 init scripts with a plain entrypoint (tini + /usr/local/bin/docker-entrypoint); app environment variables unchanged, TIMEZONE still honoured
+      - Publish to ghcr.io/andreub/docker-traefik-cloudflare-companion via GitHub Actions, with a weekly rebuild
+
+   ### Fixed
+      - CVE-2026-111497: brotli-libs 1.1.0 no longer in the image (Alpine 3.24 ships 1.2.1; nothing depends on it now)
+      - CVE-2026-111943: ca-certificates 20261020 drops "emSign ECC Root CA - G3" and "AAA Certificate Services"; certifi uses the system bundle
+      - CI fails the build if either issue comes back (.github/scripts/security-check.sh)
+
+
 ## 7.4.0 2025-04-30 <GuyKh@github>
 
    ### Added

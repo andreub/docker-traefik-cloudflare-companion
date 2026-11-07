@@ -115,7 +115,7 @@ For those wishing to assign multiple CNAMEs to a container use the following for
 
 #### Base Images used
 
-This image relies on an [Alpine Linux](https://hub.docker.com/r/tiredofit/alpine) base image that relies on an [init system](https://github.com/just-containers/s6-overlay) for added capabilities. Outgoing SMTP capabilities are handlded via `msmtp`. Individual container performance monitoring is performed by [zabbix-agent](https://zabbix.org). Additional tools include: `bash`,`curl`,`less`,`logrotate`, `nano`.
+This fork (`ghcr.io/andreub/docker-traefik-cloudflare-companion`) is built on the official [Alpine Linux](https://hub.docker.com/_/alpine) image with [tini](https://github.com/krallin/tini) as init. The tiredofit base-image options (`CONTAINER_*`, monitoring, messaging, logrotate) are no longer available; `TIMEZONE` (or `TZ`) still works.
 
 Be sure to view the following repositories to understand all the customizable options:
 

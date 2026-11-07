@@ -1,17 +1,15 @@
-ARG DISTRO="alpine"
-ARG DISTRO_VARIANT="3.21"
+ARG ALPINE_VERSION="3.24"
 
-FROM docker.io/tiredofit/${DISTRO}:${DISTRO_VARIANT}-7.10.30
-LABEL maintainer="Dave Conroy (github.com/tiredofit)"
+FROM docker.io/library/alpine:${ALPINE_VERSION}
+LABEL maintainer="andreub (fork of github.com/tiredofit/docker-traefik-cloudflare-companion)" \
+      org.opencontainers.image.source="https://github.com/andreub/docker-traefik-cloudflare-companion"
 
-ENV CONTAINER_ENABLE_MESSAGING=FALSE \
-    CONTAINER_ENABLE_SCHEDULING=FALSE \
-    CONTAINER_PROCESS_RUNAWAY_PROTECTOR=FALSE \
-    IMAGE_NAME="tiredofit/traefik-cloudflare-companion" \
-    IMAGE_REPO_URL="https://github.com/tiredofit/docker-traefik-cloudflare-companion/"
+ENV IMAGE_NAME="andreub/docker-traefik-cloudflare-companion" \
+    IMAGE_REPO_URL="https://github.com/andreub/docker-traefik-cloudflare-companion/"
 
-RUN source /assets/functions/00-container && \
-    set -x && \
+COPY requirements.txt /tmp/requirements.txt
+
+RUN set -eux && \
     addgroup -S -g 8080 tcc && \
     adduser -D -S -s /sbin/nologin \
             -h /dev/null \
@@ -20,25 +18,25 @@ RUN source /assets/functions/00-container && \
             -u 8080 tcc \
             && \
     \
-    package update && \
-    package upgrade && \
-    package install .tcc-build-deps \
+    apk upgrade --no-cache && \
+    apk add --no-cache --virtual .tcc-build-deps \
                 cargo \
                 gcc \
                 libffi-dev \
                 musl-dev \
                 openssl-dev \
-                py-pip \
+                py3-pip \
                 py3-setuptools \
                 py3-wheel \
                 python3-dev \
                 && \
     \
-    package install .tcc-run-deps \
-                docker-py \
+    apk add --no-cache \
+                ca-certificates \
                 py3-beautifulsoup4 \
                 py3-certifi \
                 py3-chardet \
+                py3-docker-py \
                 py3-idna \
                 py3-openssl \
                 py3-packaging \
@@ -48,17 +46,18 @@ RUN source /assets/functions/00-container && \
                 py3-websocket-client \
                 py3-yaml \
                 python3 \
+                su-exec \
+                tini \
+                tzdata \
                 && \
     \
-    pip install --break-system-packages \
-            cloudflare==4.1.* \
-            get-docker-secret \
-            requests \
-            && \
+    pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt && \
     \
-    package remove .tcc-build-deps && \
-    package cleanup && \
+    apk del .tcc-build-deps && \
     rm -rf /root/.cache \
-           /root/.cargo
+           /root/.cargo \
+           /tmp/requirements.txt
 
 COPY install /
+
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/docker-entrypoint"]

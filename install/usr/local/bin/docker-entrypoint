@@ -1,0 +1,62 @@
+#!/bin/sh
+# Replaces the tiredofit/alpine s6 init scripts (cont-init.d + services.available)
+# that this image used before. Same defaults and checks, then runs the app.
+set -eu
+
+: "${DOCKER_ENTRYPOINT:=unix:///var/run/docker.sock}"
+: "${LOG_FILE:=tcc.log}"
+: "${LOG_PATH:=/logs/}"
+: "${LOG_TYPE:=BOTH}"
+: "${TCC_USER:=root}"
+export DOCKER_ENTRYPOINT LOG_FILE LOG_PATH LOG_TYPE TCC_USER
+
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*"; }
+
+# Timezone (TIMEZONE was handled by the old base image; TZ also works)
+if [ -n "${TIMEZONE:-}" ]; then
+    if [ -f "/usr/share/zoneinfo/${TIMEZONE}" ]; then
+        export TZ="${TIMEZONE}"
+    else
+        log "[WARN] Unknown TIMEZONE '${TIMEZONE}', leaving default"
+    fi
+fi
+
+# Log file setup (was bootstrap_filesystem)
+case "$(echo "${LOG_TYPE}" | tr '[:upper:]' '[:lower:]')" in
+    both | file)
+        mkdir -p "${LOG_PATH}"
+        [ "$(stat -c %U "${LOG_PATH}")" = "${TCC_USER}" ] || chown "${TCC_USER}:${TCC_USER}" "${LOG_PATH}"
+        [ -f "${LOG_PATH}/${LOG_FILE}" ] || su-exec "${TCC_USER}" touch "${LOG_PATH}/${LOG_FILE}"
+        [ "$(stat -c %U "${LOG_PATH}/${LOG_FILE}")" = "${TCC_USER}" ] || chown "${TCC_USER}:${TCC_USER}" "${LOG_PATH}/${LOG_FILE}"
+        ;;
+esac
+
+# Allow `docker run <image> <command>` for debugging
+if [ "$#" -gt 0 ]; then
+    exec "$@"
+fi
+
+# Sanity checks (was sanity_test)
+if [ -z "${DOCKER_HOST:-}" ] && [ "${TCC_USER}" != "root" ]; then
+    case "${DOCKER_ENTRYPOINT}" in
+        unix://*)
+            docker_socket="${DOCKER_ENTRYPOINT#unix://}"
+            if [ -S "${docker_socket}" ] && su-exec "${TCC_USER}" test -r "${docker_socket}"; then
+                :
+            else
+                log "[ERROR] Can't access Docker socket at '${docker_socket}' as user '${TCC_USER}'"
+                exit 1
+            fi
+            ;;
+    esac
+fi
+for var in TARGET_DOMAIN DOMAIN1; do
+    eval "val=\${${var}:-}"
+    if [ -z "${val}" ]; then
+        log "[ERROR] ${var} is not set"
+        exit 1
+    fi
+done
+
+log "[INFO] Starting Traefik Cloudflare Companion"
+exec su-exec "${TCC_USER}" python3 -u /usr/sbin/cloudflare-companion
