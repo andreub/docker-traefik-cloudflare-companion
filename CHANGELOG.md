@@ -1,10 +1,15 @@
+## 7.4.0-andreub.3 2026-11-07 <andreub@github>
+
+   ### Fixed
+      - Crash when the Cloudflare API returns an error ("%d format: a real number is required"); merged upstream PR tiredofit/docker-traefik-cloudflare-companion#119 by fermion2020
+
+
 ## 7.4.0-andreub.2 2026-11-07 <andreub@github>
 
    ### Changed
       - Update cloudflare Python SDK 4.1.x -> 5.10.x (no breaking changes in the DNS records API; dry-run tested against a live zone)
 
    ### Fixed
-      - Crash when the Cloudflare API returns an error ("%d format: a real number is required"); merged upstream PR tiredofit/docker-traefik-cloudflare-companion#119 by fermion2020
       - DRY_RUN with REFRESH_ENTRIES crashed with "TypeError: ... object is not subscriptable" (record["id"] -> record.id), same change as upstream PR tiredofit/docker-traefik-cloudflare-companion#122
 
 
