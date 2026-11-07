@@ -4,7 +4,7 @@
       - Update cloudflare Python SDK 4.1.x -> 5.10.x (no breaking changes in the DNS records API; dry-run tested against a live zone)
 
    ### Fixed
-      - DRY_RUN with REFRESH_ENTRIES crashed with "TypeError: ... object is not subscriptable" (record["id"] -> record.id)
+      - DRY_RUN with REFRESH_ENTRIES crashed with "TypeError: ... object is not subscriptable" (record["id"] -> record.id), same change as upstream PR tiredofit/docker-traefik-cloudflare-companion#122
 
 
 ## 7.4.0-andreub.1 2026-11-07 <andreub@github>
