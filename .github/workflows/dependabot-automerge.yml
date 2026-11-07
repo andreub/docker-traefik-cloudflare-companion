@@ -1,0 +1,101 @@
+name: dependabot_automerge
+
+# Runs after build_image finishes on a Dependabot PR (security checks + smoke test).
+# Safe updates (docker/pip semver-patch or digest-only) are merged and a new image is built;
+# everything else waits for review. Every outcome is sent to Telegram.
+on:
+  workflow_run:
+    workflows: [build_image]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Only send a test Telegram message"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  test-notification:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send test message
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEXT: "🧪 ${{ github.repository }}: Dependabot notifications are set up."
+        run: |
+          curl -sSf -o /dev/null https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \
+            --data-urlencode chat_id="$TELEGRAM_CHAT_ID" --data-urlencode text="$TEXT"
+
+  automerge:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: pr
+        name: Find PR and decide
+        run: |
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          [ -n "$number" ] || { echo "No open PR for $BRANCH"; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; }
+          # Skip if the PR has moved on since this CI run
+          [ "$(gh pr view "$number" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" ] \
+            || { echo "PR head changed; skipping"; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; }
+          decision=$(gh api "repos/$GH_REPO/commits/$HEAD_SHA" --jq .commit.message \
+            | .github/scripts/dependabot-decide.sh "$BRANCH")
+          [ "$CONCLUSION" = success ] || decision=failed
+          {
+            echo "number=$number"
+            echo "url=$(gh pr view "$number" --json url --jq .url)"
+            echo "title=$(gh pr view "$number" --json title --jq .title)"
+            echo "decision=$decision"
+          } >> "$GITHUB_OUTPUT"
+          echo "PR #$number: $decision"
+
+      - name: Merge and build
+        if: steps.pr.outputs.skip != 'true' && steps.pr.outputs.decision == 'safe'
+        run: |
+          gh pr merge "${{ steps.pr.outputs.number }}" --squash --delete-branch
+          # A merge made with GITHUB_TOKEN doesn't trigger the push workflow; dispatch it.
+          gh workflow run build_image --ref main
+
+      - name: Notify Telegram
+        if: always() && steps.pr.outputs.skip != 'true' && steps.pr.outputs.decision != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DECISION: ${{ steps.pr.outputs.decision }}
+          MERGE_OUTCOME: ${{ job.status }}
+          TITLE: ${{ steps.pr.outputs.title }}
+          URL: ${{ steps.pr.outputs.url }}
+        run: |
+          case "$DECISION" in
+            safe)
+              if [ "$MERGE_OUTCOME" = success ]; then
+                head="✅ Auto-merged; new image building (Watchtower will deploy it)"
+              else
+                head="⚠️ Safe update, but the auto-merge failed — please merge by hand"
+              fi ;;
+            review) head="👀 Needs your review (CI passed)" ;;
+            failed) head="❌ CI failed on Dependabot PR — $RUN_URL" ;;
+          esac
+          text=$(printf '%s\n%s\n%s' "$head" "$TITLE" "$URL")
+          curl -sSf -o /dev/null https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \
+            --data-urlencode chat_id="$TELEGRAM_CHAT_ID" --data-urlencode text="$text" \
+            --data-urlencode disable_web_page_preview=true
