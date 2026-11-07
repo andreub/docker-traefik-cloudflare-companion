@@ -173,8 +173,13 @@ def point_domain(name, domain_infos):
             if is_domain_excluded(name, domain_info):
                 continue
 
-            records_response = cf.dns.records.list(zone_id=domain_info['zone_id'], name=name)
-            records = records_response.result
+            try:
+                records = cf.dns.records.list(zone_id=domain_info['zone_id'], name=name).result
+            except CloudflareAPIError as ex:
+                # Not marked as synced, so it is retried on the next Traefik poll / Docker event
+                logger.error('** %s - could not list DNS records: %s', name, ex)
+                ok = False
+                continue
 
             data = {
                 u'type': RC_TYPE,

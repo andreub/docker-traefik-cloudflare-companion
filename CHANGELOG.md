@@ -1,3 +1,9 @@
+## 7.4.0-andreub.4 2026-11-07 <andreub@github>
+
+   ### Fixed
+      - A Cloudflare API error while listing DNS records (network blip, expired token, bad zone ID) no longer crashes the app; it is logged and the host is retried on the next Traefik poll / Docker event
+
+
 ## 7.4.0-andreub.3 2026-11-07 <andreub@github>
 
    ### Fixed
